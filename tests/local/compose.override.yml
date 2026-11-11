@@ -1,0 +1,6 @@
+# Local smoke test only: publishes ingress on loopback so scripts/smoke.py can
+# reach it. Never deployed. See README "Local smoke test".
+services:
+  ingress:
+    ports:
+      - "127.0.0.1:7849:7849"

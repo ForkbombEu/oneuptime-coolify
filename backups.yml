@@ -1,0 +1,82 @@
+# Backup sidecars, merged over upstream's compose by scripts/render.py.
+#
+# OneUptime's own backup scripts assume the cloned-repo install, and Coolify's
+# S3 backups only cover Coolify-managed databases, so backups ship here.
+#
+# offen/docker-volume-backup acts on labels across the whole Docker host, so
+# every label value carries BACKUP_SCOPE. Give the restore-drill resource a
+# different BACKUP_SCOPE (and BACKUP_PREFIX) so it never triggers, or is
+# triggered by, production's sidecars.
+#
+# The S3 settings are repeated per sidecar on purpose: no YAML anchors, so the
+# rendered bundle stays one flat file.
+
+services:
+  postgres:
+    labels:
+      # Run by backup-postgres before each archive: a custom-format dump.
+      docker-volume-backup.archive-pre: /bin/sh -c 'pg_dump -U "$$POSTGRES_USER" -Fc "$$POSTGRES_DB" > /dumps/oneuptime.dump'
+      docker-volume-backup.exec-label: ${BACKUP_SCOPE}-postgres
+    volumes:
+      - postgres-dump:/dumps
+
+  backup-postgres:
+    image: offen/docker-volume-backup:v2.50.1
+    restart: always
+    environment:
+      BACKUP_CRON_EXPRESSION: "0 2 * * *"
+      BACKUP_FILENAME: postgres-%Y-%m-%dT%H-%M-%S.tar.gz
+      BACKUP_PRUNING_PREFIX: postgres-
+      # One retention window only: 56 days covers the spec's daily x14 + weekly x8.
+      BACKUP_RETENTION_DAYS: "56"
+      EXEC_LABEL: ${BACKUP_SCOPE}-postgres
+      EXEC_FORWARD_OUTPUT: "true"
+      # Nothing carries this label: the Postgres backup never stops a container.
+      BACKUP_STOP_DURING_BACKUP_LABEL: ${BACKUP_SCOPE}-postgres-never-stop
+      AWS_ENDPOINT: ${S3_ENDPOINT}
+      AWS_S3_BUCKET_NAME: ${S3_BUCKET}
+      AWS_S3_PATH: ${BACKUP_PREFIX}
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+    volumes:
+      - postgres-dump:/backup/postgres-dump:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  clickhouse:
+    labels:
+      # backup-clickhouse stops ClickHouse for a consistent copy, then restarts it.
+      docker-volume-backup.stop-during-backup: ${BACKUP_SCOPE}-clickhouse
+
+  backup-clickhouse:
+    image: offen/docker-volume-backup:v2.50.1
+    restart: always
+    environment:
+      BACKUP_CRON_EXPRESSION: "0 3 * * 0"
+      BACKUP_FILENAME: clickhouse-%Y-%m-%dT%H-%M-%S.tar.gz
+      BACKUP_PRUNING_PREFIX: clickhouse-
+      BACKUP_RETENTION_DAYS: "28"
+      BACKUP_STOP_DURING_BACKUP_LABEL: ${BACKUP_SCOPE}-clickhouse
+      # Nothing carries this label: no dump hooks run for the ClickHouse backup.
+      EXEC_LABEL: ${BACKUP_SCOPE}-clickhouse-no-hooks
+      AWS_ENDPOINT: ${S3_ENDPOINT}
+      AWS_S3_BUCKET_NAME: ${S3_BUCKET}
+      AWS_S3_PATH: ${BACKUP_PREFIX}
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+    volumes:
+      - clickhouse:/backup/clickhouse:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+
+volumes:
+  postgres-dump:
