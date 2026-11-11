@@ -3,10 +3,12 @@
 # OneUptime's own backup scripts assume the cloned-repo install, and Coolify's
 # S3 backups only cover Coolify-managed databases, so backups ship here.
 #
+# Optional: only docker-compose.backups.yml includes this file.
+#
 # offen/docker-volume-backup acts on labels across the whole Docker host, so
-# every label value carries BACKUP_SCOPE. Give the restore-drill resource a
-# different BACKUP_SCOPE (and BACKUP_PREFIX) so it never triggers, or is
-# triggered by, production's sidecars.
+# every label value carries BACKUP_SCOPE. A second backups-bundle resource on
+# the same server needs its own BACKUP_SCOPE (and BACKUP_PREFIX). The restore
+# drill uses the core bundle, which carries no labels.
 #
 # The S3 settings are repeated per sidecar on purpose: no YAML anchors, so the
 # rendered bundle stays one flat file.

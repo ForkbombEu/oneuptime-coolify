@@ -11,7 +11,8 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from check import check_compose, load  # noqa: E402
 
-BUNDLE = ROOT / "docker-compose.yml"
+CORE = ROOT / "docker-compose.yml"
+WITH_BACKUPS = ROOT / "docker-compose.backups.yml"
 
 
 def load_unnormalized(path):
@@ -24,18 +25,20 @@ def load_unnormalized(path):
     return json.loads(result.stdout)
 
 
-class BundleTest(unittest.TestCase):
+class BundleContract:
+    """Contracts both bundles meet. Subclasses set BUNDLE."""
+
     @classmethod
     def setUpClass(cls):
-        cls.model = load(BUNDLE)
+        cls.model = load(cls.BUNDLE)
         cls.services = cls.model["services"]
 
     def test_bundle_passes_the_static_check(self):
-        self.assertEqual(check_compose(BUNDLE), [])
+        self.assertEqual(check_compose(self.BUNDLE), [])
 
     def test_volumes_are_scoped_to_the_coolify_resource(self):
         # A fixed name would make the restore-drill resource share production's volumes.
-        for name, volume in load_unnormalized(BUNDLE)["volumes"].items():
+        for name, volume in load_unnormalized(self.BUNDLE)["volumes"].items():
             self.assertNotIn("name", volume or {}, f"volume {name} has a fixed name")
 
     def test_no_leftover_extension_blocks(self):
@@ -74,6 +77,19 @@ class BundleTest(unittest.TestCase):
     def test_every_container_caps_its_logs(self):
         for name, service in self.services.items():
             self.assertTrue(service.get("logging", {}).get("options", {}).get("max-size"), name)
+
+
+class CoreBundleTest(BundleContract, unittest.TestCase):
+    BUNDLE = CORE
+
+    def test_core_bundle_has_no_backups(self):
+        self.assertFalse([name for name in self.services if name.startswith("backup-")])
+        self.assertNotIn("S3_", CORE.read_text())
+        self.assertNotIn("docker-volume-backup", CORE.read_text())
+
+
+class BackupsBundleTest(BundleContract, unittest.TestCase):
+    BUNDLE = WITH_BACKUPS
 
     def test_postgres_is_dumped_daily_to_s3(self):
         postgres, backup = self.services["postgres"], self.services["backup-postgres"]

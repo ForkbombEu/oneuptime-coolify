@@ -5,6 +5,7 @@ test:
 
 check:
 	scripts/check.py docker-compose.yml
+	scripts/check.py docker-compose.backups.yml
 
 render:
 	scripts/render.py

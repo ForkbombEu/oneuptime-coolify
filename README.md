@@ -10,11 +10,12 @@ Coolify's Traefik terminates TLS; OneUptime's `ingress` runs behind it on contai
 
 | Path | What it is |
 | --- | --- |
-| `docker-compose.yml` | The bundle Coolify deploys. **Generated: don't edit by hand.** |
+| `docker-compose.yml` | The bundle Coolify deploys: OneUptime only. **Generated: don't edit by hand.** |
+| `docker-compose.backups.yml` | The same plus the optional backup sidecars. **Generated.** |
 | `overrides.env` | Our settings over upstream's `config.example.env`, including `APP_TAG` |
-| `backups.yml` | Backup sidecars merged into the bundle |
+| `backups.yml` | Backup sidecars, merged into `docker-compose.backups.yml` only |
 | `Clickhouse/`, `packages/Probe/` | Files the compose bind-mounts, copied from upstream |
-| `scripts/render.py` | Rebuilds `docker-compose.yml` from upstream |
+| `scripts/render.py` | Rebuilds both bundles from upstream |
 | `scripts/check.py` | Static check of the bundle |
 | `scripts/smoke.py` | Smoke check of a running deploy |
 | `tests/` | Tests for the checks and the bundle, plus the local smoke test |
@@ -23,8 +24,8 @@ Coolify's Traefik terminates TLS; OneUptime's `ingress` runs behind it on contai
 
 ```sh
 make test          # unit tests + bundle contract tests (needs Docker)
-make check         # static check of docker-compose.yml
-make render        # re-render docker-compose.yml from upstream at APP_TAG
+make check         # static check of both bundles
+make render        # re-render both bundles from upstream at APP_TAG
 make smoke-local   # start the core services locally and smoke check them
 scripts/smoke.py https://uptime.<our-domain>   # after every deploy/upgrade
 ```
@@ -35,11 +36,11 @@ The repo needs only Python 3 and Docker Compose v2, with no Python packages.
 
 `scripts/render.py` clones upstream at the tag named by `APP_TAG`, then:
 
-1. **Flattens the compose.** Docker Compose resolves upstream's `docker-compose.yml` (with `extends`, anchors and merges) together with `backups.yml`. It interpolates upstream's `config.example.env` overlaid with `overrides.env`.
+1. **Flattens the compose.** Docker Compose resolves upstream's `docker-compose.yml` (with `extends`, anchors and merges), plus `backups.yml` for the backups bundle. It interpolates upstream's `config.example.env` overlaid with `overrides.env`.
 2. **Keeps some values as variables.** The variables Coolify must own (below) go in as sentinels and come back out as `${VAR:?}` or `${VAR:-default}`, so no secret is ever committed.
 3. **Removes what Coolify manages.** Published ports, `container_name`, the custom network and fixed volume names all go. Volume names must stay unfixed so each Coolify resource gets its own volumes.
 4. **Copies the mounted files.** Every file the compose bind-mounts is copied from upstream at the same relative path.
-5. **Checks the result.** It writes `docker-compose.yml` and runs `scripts/check.py`.
+5. **Checks the result.** It writes `docker-compose.yml` and `docker-compose.backups.yml` and runs `scripts/check.py` on both.
 
 `scripts/check.py` fails on any of these:
 - leftover `extends`, anchors or merge keys
@@ -66,13 +67,9 @@ Set these in the resource's **Environment Variables** tab. Coolify refuses to de
 | `REGISTER_PROBE_KEY` | yes | `openssl rand -hex 32` |
 | `GLOBAL_PROBE_1_KEY` | yes | `openssl rand -hex 32` |
 | `GLOBAL_RUNNER_KEY` | yes | `openssl rand -hex 32` |
-| `S3_ENDPOINT` | yes | S3 host without scheme, e.g. `s3.eu-central-1.amazonaws.com` |
-| `S3_BUCKET` | yes | The bucket Coolify already backs up to |
-| `S3_ACCESS_KEY_ID` | yes | Key with write access to `S3_BUCKET/BACKUP_PREFIX` |
-| `S3_SECRET_ACCESS_KEY` | yes | Secret for that key |
 | `APP_TAG` | no (default in bundle) | Leave unset; upgrades change the default via a PR |
-| `BACKUP_PREFIX` | no (default `oneuptime`) | Path in the bucket; override only for the restore drill |
-| `BACKUP_SCOPE` | no (default `oneuptime`) | Label scope for backup hooks; override only for the restore drill |
+
+The backups bundle needs a few more; see [Optional: backups](#optional-backups-phase-4).
 
 These are plain variables rather than Coolify magic variables (`SERVICE_PASSWORD_*`), so their values are visible and copyable on day one.
 
@@ -82,10 +79,10 @@ Prerequisites, all outside this repo:
 - a dedicated server added to Coolify, with its proxy (Traefik) running
 - DNS for `uptime.` (and `status.`)
 - provider firewall open only on 22/80/443
-- SMTP credentials, the S3 bucket, a password-manager entry
+- SMTP credentials and a password-manager entry (plus an S3 bucket if you enable backups)
 - this repo pushed to a private remote and connected to Coolify
 
-1. In Coolify, create the resource: Project "Monitoring" → environment `production` → New Resource → Private repository → this repo. Choose Build Pack **Docker Compose** with compose path `/docker-compose.yml`.
+1. In Coolify, create the resource: Project "Monitoring" → environment `production` → New Resource → Private repository → this repo. Choose Build Pack **Docker Compose** with compose path `/docker-compose.yml`, or `/docker-compose.backups.yml` to include backups (see [Optional: backups](#optional-backups-phase-4)).
 2. Set a domain on the **`ingress` service only**: `https://uptime.<our-domain>:7849`. The `:7849` tells Coolify which container port to route to; Traefik still serves 443.
 3. Fill in the variables above and save them to the password manager.
 4. Check Persistent Storage: the `postgres`, `clickhouse` and `postgres-dump` volumes should be listed.
@@ -109,7 +106,37 @@ Do these in order, before sharing the URL:
 7. Add an external check on `https://uptime.<our-domain>` from outside this server.
 8. Check which edition (Community or Enterprise) includes SAML/OIDC before promising SSO.
 
-## Backups (Phase 4)
+## Upgrades (Phase 5)
+
+Every 1–2 weeks, one major version at a time. Minor and patch versions can be skipped.
+
+1. Make sure a fresh Postgres dump exists. With backups enabled, confirm last night's landed in S3, or run `docker exec <backup-postgres container> backup`. Without backups, take one by hand: `docker exec <postgres container> pg_dump -U postgres -Fc oneuptimedb > pre-upgrade.dump`.
+2. Read the release notes and upgrading guide for any majors in between.
+3. Bump `APP_TAG` in `overrides.env`, then run `make render && make test`.
+4. Review the diff of both bundles and the copied files. A tag-only change touches only the image defaults. Anything else means upstream changed structure (new services, variables or mounted files), so review it closely.
+5. Merge, redeploy in Coolify, then run `scripts/smoke.py https://uptime.<our-domain>` and check the `app` logs for migration errors.
+
+**Rollback:** redeploy the previous commit. If the new version already ran migrations, also restore Postgres from the pre-upgrade dump.
+
+## Optional: backups (Phase 4)
+
+Backups are off in the default bundle. Turn them on when the S3 bucket exists:
+
+1. In the Coolify resource, change the compose path to `/docker-compose.backups.yml`.
+2. Add the variables below.
+3. Redeploy.
+
+The Postgres and ClickHouse volumes are defined the same way in both bundles, so switching within one resource should keep the data. Confirm the volumes are unchanged under Persistent Storage before the first switch in production. Without backups, take a manual dump before every upgrade (see [Upgrades](#upgrades-phase-5)).
+
+| Variable | Required | Value |
+| --- | --- | --- |
+| `S3_ENDPOINT` | yes | S3 host without scheme, e.g. `s3.eu-central-1.amazonaws.com` |
+| `S3_BUCKET` | yes | The bucket Coolify already backs up to |
+| `S3_ACCESS_KEY_ID` | yes | Key with write access to `S3_BUCKET/BACKUP_PREFIX` |
+| `S3_SECRET_ACCESS_KEY` | yes | Secret for that key |
+| `BACKUP_PREFIX` | no (default `oneuptime`) | Path in the bucket |
+| `BACKUP_SCOPE` | no (default `oneuptime`) | Label scope for the backup hooks; change it only if a second backups-bundle resource shares the server |
+
 
 | What | Sidecar | Schedule | Kept | S3 path |
 | --- | --- | --- | --- | --- |
@@ -131,9 +158,7 @@ Run it before go-live and after any change to `backups.yml`. These commands have
 
 **The drill's database is a copy of production:** same monitors, SMTP settings and on-call policies. A running drill can send real alerts. Use a different server if you can, warn on-call before you start, and keep it short.
 
-1. Deploy this repo as a second, temporary Coolify resource. Use the same variables as production except:
-    - `BACKUP_SCOPE=oneuptime-drill` and `BACKUP_PREFIX=oneuptime-drill`. Without these, production's hooks would act on the drill's containers.
-    - `HOST` set to a throwaway hostname.
+1. Deploy this repo as a second, temporary Coolify resource with compose path `/docker-compose.yml`. Use the core bundle so the drill has no backup sidecars, and production's hooks can't reach its unlabelled containers. Use the same variables as production except `HOST`, which gets a throwaway hostname.
 
    Keep production's `ENCRYPTION_SECRET` and `ONEUPTIME_SECRET`, or the restored data can't be decrypted.
 
@@ -157,18 +182,6 @@ Run it before go-live and after any change to `backups.yml`. These commands have
    docker start <drill clickhouse container>
    ```
 6. Delete the temporary resource and its volumes.
-
-## Upgrades (Phase 5)
-
-Every 1–2 weeks, one major version at a time. Minor and patch versions can be skipped.
-
-1. Confirm last night's Postgres backup landed in S3, or take one now.
-2. Read the release notes and upgrading guide for any majors in between.
-3. Bump `APP_TAG` in `overrides.env`, then run `make render && make test`.
-4. Review the diff of `docker-compose.yml` and the copied files. A tag-only change touches only the image defaults. Anything else means upstream changed structure (new services, variables or mounted files), so review it closely.
-5. Merge, redeploy in Coolify, then run `scripts/smoke.py https://uptime.<our-domain>` and check the `app` logs for migration errors.
-
-**Rollback:** redeploy the previous commit. If the new version already ran migrations, also restore Postgres from the pre-upgrade dump.
 
 ## Must-knows
 
