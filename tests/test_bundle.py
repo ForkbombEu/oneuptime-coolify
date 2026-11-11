@@ -1,15 +1,9 @@
 """Contracts the committed bundle must meet (see .scratch/oneuptime-coolify/spec.md)."""
 
-import json
-import subprocess
-import sys
 import unittest
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "scripts"))
-
-from check import check_compose, load  # noqa: E402
+from check import check_compose, load
+from common import ROOT, compose_config
 
 CORE = ROOT / "docker-compose.yml"
 WITH_BACKUPS = ROOT / "docker-compose.backups.yml"
@@ -17,12 +11,7 @@ WITH_BACKUPS = ROOT / "docker-compose.backups.yml"
 
 def load_unnormalized(path):
     """The model as written: no project-derived names, volumes left in short syntax."""
-    result = subprocess.run(
-        ["docker", "compose", "-f", str(path), "config",
-         "--no-interpolate", "--no-normalize", "--no-path-resolution", "--format", "json"],
-        capture_output=True, text=True, check=True,
-    )
-    return json.loads(result.stdout)
+    return compose_config([path], "--no-interpolate", "--no-normalize", "--no-path-resolution")
 
 
 class BundleContract:

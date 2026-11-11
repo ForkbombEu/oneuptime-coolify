@@ -28,9 +28,8 @@ import tempfile
 from pathlib import Path
 
 from check import check_compose, repo_file_sources
+from common import OVERRIDES, ROOT, compose_config, read_env, report
 
-ROOT = Path(__file__).resolve().parent.parent
-OVERRIDES = ROOT / "overrides.env"
 BACKUPS = ROOT / "backups.yml"
 # Output file -> extra compose files merged over upstream's.
 BUNDLES = {
@@ -64,16 +63,6 @@ DEFAULTED = ["APP_TAG", "BACKUP_PREFIX", "BACKUP_SCOPE"]  # BACKUP_*: backups bu
 SENTINEL = re.compile(r"VIGIL__([A-Z0-9_]+?)__")
 
 
-def read_env(path):
-    values = {}
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if line and not line.startswith("#"):
-            key, _, value = line.partition("=")
-            values[key] = value
-    return values
-
-
 def clone_upstream(tag, into):
     subprocess.run(
         ["git", "-c", "advice.detachedHead=false", "clone", "--quiet", "--depth", "1", "--branch", tag, UPSTREAM_REPO, str(into)],
@@ -85,19 +74,13 @@ def clone_upstream(tag, into):
 def flatten(upstream, extra_files):
     env = {key: os.environ[key] for key in ("PATH", "HOME", "DOCKER_HOST") if key in os.environ}
     env.update({name: f"VIGIL__{name}__" for name in REQUIRED + DEFAULTED})
-    result = subprocess.run(
-        [
-            "docker", "compose",
-            "--project-directory", str(upstream),
-            "-f", str(upstream / "docker-compose.yml"),
-            *[arg for path in extra_files for arg in ("-f", str(path))],
-            "--env-file", str(upstream / "config.example.env"),
-            "--env-file", str(OVERRIDES),
-            "config", "--no-path-resolution", "--format", "json",
-        ],
-        capture_output=True, text=True, env=env, check=True,
+    return compose_config(
+        [upstream / "docker-compose.yml", *extra_files],
+        "--no-path-resolution",
+        project_directory=upstream,
+        env_files=[upstream / "config.example.env", OVERRIDES],
+        env=env,
     )
-    return json.loads(result.stdout)
 
 
 def clean(model):
@@ -195,9 +178,7 @@ def main():
         for output, extra_files in BUNDLES.items():
             render(upstream.resolve(), output, extra_files)
     problems = [f"{output.name}: {problem}" for output in BUNDLES for problem in check_compose(output)]
-    for problem in problems:
-        print(problem, file=sys.stderr)
-    return 1 if problems else 0
+    return report(problems, sys.stderr)
 
 
 if __name__ == "__main__":

@@ -7,31 +7,28 @@ Exits non-zero and prints one line per problem when the bundle breaks a
 contract from the spec (.scratch/oneuptime-coolify/spec.md).
 """
 
-import json
 import re
-import subprocess
 import sys
 from pathlib import Path
+
+from common import compose_config, report
 
 
 def load(compose_path):
     """Parse the compose file with Docker Compose itself, without interpolating."""
-    result = subprocess.run(
-        [
-            "docker", "compose",
-            "--project-directory", str(compose_path.parent),
-            "-f", str(compose_path),
-            "config", "--no-interpolate", "--no-path-resolution", "--format", "json",
-        ],
-        capture_output=True, text=True, check=True,
-    )
-    return json.loads(result.stdout)
+    return compose_config([compose_path], "--no-interpolate", "--no-path-resolution")
+
+
+def split_image(image):
+    """Split an image reference into (repository, tag), allowing a ${VAR:-default} tag."""
+    variable = image.find("${")
+    slash = image.rfind("/", 0, variable if variable != -1 else len(image))
+    name, _, tag = image[slash + 1:].partition(":")
+    return image[:slash + 1] + name, tag
 
 
 def image_problems(name, image):
-    slash = image.rfind("/", 0, image.find("${") if "${" in image else len(image))
-    repository, _, tag = image[slash + 1:].partition(":")
-    repository = image[:slash + 1] + repository
+    repository, tag = split_image(image)
     if repository.startswith("oneuptime/"):
         if not tag.startswith("${APP_TAG"):
             return [f"{name}: image {image} must take its tag from APP_TAG"]
@@ -52,16 +49,23 @@ def is_literal(value):
     return bool(value) and "$" not in value
 
 
+def as_text(command):
+    """A command or healthcheck test as one string, whether written as a string or a list."""
+    if isinstance(command, str):
+        return command
+    return " ".join(command or [])
+
+
 def secret_problems(name, service):
     problems = []
     for key, value in (service.get("environment") or {}).items():
         if SECRET_NAME.search(key) and "PUBLIC" not in key and is_literal(value):
             problems.append(f"{name}: {key} holds a literal value; use a Coolify variable")
-    for field in ("command", "healthcheck"):
-        raw = service.get(field) or ""
-        if field == "healthcheck":
-            raw = raw.get("test", "") if raw else ""
-        text = raw if isinstance(raw, str) else " ".join(raw)
+    commands = {
+        "command": as_text(service.get("command")),
+        "healthcheck": as_text((service.get("healthcheck") or {}).get("test")),
+    }
+    for field, text in commands.items():
         for match in PASSWORD_ARG.finditer(text):
             if is_literal(match.group(1)):
                 flag = "--requirepass" if "--requirepass" in match.group(0) else "-a"
@@ -124,10 +128,7 @@ def check_compose(compose_path):
 
 def main(argv):
     compose_path = Path(argv[1] if len(argv) > 1 else "docker-compose.yml")
-    problems = check_compose(compose_path)
-    for problem in problems:
-        print(problem)
-    return 1 if problems else 0
+    return report(check_compose(compose_path))
 
 
 if __name__ == "__main__":

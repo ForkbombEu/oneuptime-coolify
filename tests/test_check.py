@@ -1,12 +1,10 @@
-import sys
 import tempfile
 import textwrap
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-
-from check import check_compose  # noqa: E402
+from check import check_compose
+from tests.helpers import ProblemAssertions
 
 CLEAN = """
 services:
@@ -24,7 +22,7 @@ volumes:
 """
 
 
-class CheckComposeTest(unittest.TestCase):
+class CheckComposeTest(ProblemAssertions, unittest.TestCase):
     def check(self, compose, files=()):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -33,10 +31,6 @@ class CheckComposeTest(unittest.TestCase):
                 (root / name).parent.mkdir(parents=True, exist_ok=True)
                 (root / name).write_text("x")
             return check_compose(root / "docker-compose.yml")
-
-    def assertProblem(self, problems, *words):
-        matching = [p for p in problems if all(w in p for w in words)]
-        self.assertTrue(matching, f"no problem mentioning {words} in {problems}")
 
     def test_clean_bundle_has_no_problems(self):
         self.assertEqual(self.check(CLEAN), [])

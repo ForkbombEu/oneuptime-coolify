@@ -15,7 +15,7 @@ import sys
 import urllib.error
 import urllib.request
 
-from render import OVERRIDES, read_env
+from common import OVERRIDES, read_env, report
 
 
 class Unreachable(Exception):
@@ -65,10 +65,7 @@ def main():
     parser.add_argument("url")
     parser.add_argument("--expect-version")
     args = parser.parse_args()
-    problems = smoke(args.url, args.expect_version or read_env(OVERRIDES)["APP_TAG"])
-    for problem in problems:
-        print(problem)
-    return 1 if problems else 0
+    return report(smoke(args.url, args.expect_version or read_env(OVERRIDES)["APP_TAG"]))
 
 
 if __name__ == "__main__":

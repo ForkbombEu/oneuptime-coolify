@@ -2,15 +2,13 @@ import json
 import ssl
 import subprocess
 import tempfile
-import sys
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-
-from smoke import smoke  # noqa: E402
+from smoke import smoke
+from tests.helpers import ProblemAssertions
 
 
 class FakeOneUptime:
@@ -58,11 +56,7 @@ class FakeOneUptime:
         self.server.server_close()
 
 
-class SmokeTest(unittest.TestCase):
-    def assertProblem(self, problems, *words):
-        matching = [p for p in problems if all(w in p for w in words)]
-        self.assertTrue(matching, f"no problem mentioning {words} in {problems}")
-
+class SmokeTest(ProblemAssertions, unittest.TestCase):
     def test_healthy_deploy_on_the_pinned_version_passes(self):
         with FakeOneUptime() as fake:
             self.assertEqual(smoke(fake.url, "14.0.107"), [])
