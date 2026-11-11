@@ -33,6 +33,16 @@ class BundleContract:
     def test_no_leftover_extension_blocks(self):
         self.assertFalse([key for key in self.model if key.startswith("x-")])
 
+    def test_no_empty_environment_variables_except_nginx_template_inputs(self):
+        # nginx's envsubst leaves an unset ${VAR} in the config literally, so ingress
+        # keeps the empty values its template reads; nothing else keeps empty values.
+        for name, service in self.services.items():
+            empty = {key for key, value in (service.get("environment") or {}).items() if value in ("", None)}
+            if name == "ingress":
+                self.assertEqual(empty, {"NGINX_LISTEN_ADDRESS", "NGINX_LISTEN_OPTIONS"}, name)
+            else:
+                self.assertEqual(empty, set(), name)
+
     def test_ingress_runs_behind_traefik(self):
         env = self.services["ingress"]["environment"]
         self.assertEqual(env["PROVISION_SSL"], "false")
