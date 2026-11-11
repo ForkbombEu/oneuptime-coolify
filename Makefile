@@ -1,4 +1,4 @@
-.PHONY: test check render smoke-local
+.PHONY: test check render smoke-local try try-down
 
 test:
 	python3 -m unittest discover -s tests
@@ -12,3 +12,9 @@ render:
 
 smoke-local:
 	tests/local/run.sh
+
+try:
+	tests/local/try.sh up
+
+try-down:
+	tests/local/try.sh down

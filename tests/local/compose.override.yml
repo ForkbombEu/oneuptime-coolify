@@ -1,6 +1,15 @@
-# Local smoke test only: publishes ingress on loopback so scripts/smoke.py can
-# reach it. Never deployed. See README "Local smoke test".
+# Local use only (smoke test and `make try`); never deployed.
+# Publishes ingress on loopback and swaps Traefik's https for plain http.
 services:
   ingress:
     ports:
       - "127.0.0.1:7849:7849"
+    environment:
+      HTTP_PROTOCOL: "http"
+  app:
+    environment:
+      HTTP_PROTOCOL: "http"
+  probe-1:
+    environment:
+      # Host networking: the probe reaches ingress on the host's loopback.
+      ONEUPTIME_URL: "http://localhost:7849"

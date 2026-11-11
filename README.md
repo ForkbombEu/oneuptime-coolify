@@ -27,10 +27,22 @@ make test          # unit tests + bundle contract tests (needs Docker)
 make check         # static check of both bundles
 make render        # re-render both bundles from upstream at APP_TAG
 make smoke-local   # start the core services locally and smoke check them
+make try           # run the full core bundle on http://localhost:7849 (make try-down to remove)
 scripts/smoke.py https://uptime.<our-domain>   # after every deploy/upgrade
 ```
 
 The repo needs only Python 3 and Docker Compose v2, with no Python packages.
+
+## Try it locally
+
+`make try` starts the full core bundle (probe and runner included) on http://localhost:7849. It uses `tests/local/compose.override.yml`, which:
+- publishes `ingress` on loopback
+- swaps https for http, since there's no Traefik locally
+- points the probe at `localhost`
+
+First boot takes about a minute. Then register at http://localhost:7849; the first account becomes admin.
+
+`tests/local/try.sh logs <service>` shows a service's logs. `make try-down` stops everything and deletes its data. The probe and runner log registration errors until `app` finishes migrating; they retry on their own.
 
 ## How the bundle is rendered
 
