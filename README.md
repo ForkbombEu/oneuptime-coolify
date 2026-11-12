@@ -92,9 +92,10 @@ Prerequisites, all outside this repo:
 - DNS for `uptime.` (and `status.`)
 - provider firewall open only on 22/80/443
 - SMTP credentials and a password-manager entry (plus an S3 bucket if you enable backups)
-- this repo (https://github.com/ForkbombEu/oneuptime-coolify) reachable from Coolify
+- Coolify's GitHub App installed on the ForkbombEu organization with access to this repo (https://github.com/ForkbombEu/oneuptime-coolify)
 
-1. In Coolify, create the resource: Project "Monitoring" → environment `production` → New Resource → **Public repository** → `https://github.com/ForkbombEu/oneuptime-coolify`, branch `main`. Choose Build Pack **Docker Compose** with compose path `/docker-compose.yml`, or `/docker-compose.backups.yml` to include backups (see [Optional: backups](#optional-backups-phase-4)).
+1. In Coolify, create the resource: Project "Monitoring" → environment `production` → New Resource → **Private Repository (with GitHub App)** → pick the GitHub App source → `ForkbombEu/oneuptime-coolify`, branch `main`. Choose Build Pack **Docker Compose** with compose path `/docker-compose.yml`, or `/docker-compose.backups.yml` to include backups (see [Optional: backups](#optional-backups-phase-4)).
+   The GitHub App lets Coolify redeploy on every push to `main` (Auto Deploy, in the resource's Advanced settings). Leave it on and merging to `main` deploys; turn it off to deploy only by hand.
 2. Set a domain on the **`ingress` service only**: `https://uptime.<our-domain>:7849`. The `:7849` tells Coolify which container port to route to; Traefik still serves 443.
 3. Fill in the variables above and save them to the password manager.
 4. Check Persistent Storage: the `postgres`, `clickhouse` and `postgres-dump` volumes should be listed.
@@ -126,7 +127,7 @@ Every 1–2 weeks, one major version at a time. Minor and patch versions can be 
 2. Read the release notes and upgrading guide for any majors in between.
 3. Bump `APP_TAG` in `overrides.env`, then run `make render && make test`.
 4. Review the diff of both bundles and the copied files. A tag-only change touches only the image defaults. Anything else means upstream changed structure (new services, variables or mounted files), so review it closely.
-5. Merge, redeploy in Coolify, then run `scripts/smoke.py https://uptime.<our-domain>` and check the `app` logs for migration errors.
+5. Merge. With Auto Deploy on, merging is the deploy, so step 1's dump must exist first; otherwise redeploy in Coolify. Then run `scripts/smoke.py https://uptime.<our-domain>` and check the `app` logs for migration errors.
 
 **Rollback:** redeploy the previous commit. If the new version already ran migrations, also restore Postgres from the pre-upgrade dump.
 
