@@ -2,7 +2,7 @@
 
 Self-hosted [OneUptime](https://oneuptime.com) (uptime monitors, status pages, incidents, on-call, optional telemetry), deployed as a Docker Compose application on our Coolify.
 
-Coolify's Traefik terminates TLS; OneUptime's `ingress` runs behind it on container port 7849. Single server, no HA. The spec is `.scratch/oneuptime-coolify/spec.md`.
+Coolify's Traefik terminates TLS; OneUptime's `ingress` runs behind it on container port 7849. Single server, no HA.
 
 **Current bundle: OneUptime 14.0.107**, rendered from upstream tag `14.0.107`.
 
@@ -92,9 +92,9 @@ Prerequisites, all outside this repo:
 - DNS for `uptime.` (and `status.`)
 - provider firewall open only on 22/80/443
 - SMTP credentials and a password-manager entry (plus an S3 bucket if you enable backups)
-- this repo pushed to a private remote and connected to Coolify
+- this repo (https://github.com/ForkbombEu/oneuptime-coolify) reachable from Coolify
 
-1. In Coolify, create the resource: Project "Monitoring" → environment `production` → New Resource → Private repository → this repo. Choose Build Pack **Docker Compose** with compose path `/docker-compose.yml`, or `/docker-compose.backups.yml` to include backups (see [Optional: backups](#optional-backups-phase-4)).
+1. In Coolify, create the resource: Project "Monitoring" → environment `production` → New Resource → **Public repository** → `https://github.com/ForkbombEu/oneuptime-coolify`, branch `main`. Choose Build Pack **Docker Compose** with compose path `/docker-compose.yml`, or `/docker-compose.backups.yml` to include backups (see [Optional: backups](#optional-backups-phase-4)).
 2. Set a domain on the **`ingress` service only**: `https://uptime.<our-domain>:7849`. The `:7849` tells Coolify which container port to route to; Traefik still serves 443.
 3. Fill in the variables above and save them to the password manager.
 4. Check Persistent Storage: the `postgres`, `clickhouse` and `postgres-dump` volumes should be listed.
@@ -204,3 +204,7 @@ Run it before go-live and after any change to `backups.yml`. These commands have
 - OTLP/gRPC doesn't work behind Traefik; use OTLP/HTTP at `/otlp`.
 - ClickHouse disk is what fills up. Set retention before enabling telemetry, and alert on disk.
 - Never run OneUptime's own installer on a Coolify host; it fights Traefik for 80/443.
+
+## Licence
+
+AGPL-3.0, see [LICENSE](LICENSE). Files rendered or copied from OneUptime stay under Apache-2.0; see [NOTICE](NOTICE).

@@ -1,0 +1,20 @@
+oneuptime-coolify
+Copyright (C) Forkbomb BV. Licensed under the GNU Affero General Public
+License v3.0; see LICENSE.
+
+This repository includes files rendered or copied from OneUptime
+(https://github.com/OneUptime/oneuptime):
+
+  Copyright (c) HackerBay, Inc. (doing business as OneUptime)
+  Licensed under the Apache License, Version 2.0
+  (https://www.apache.org/licenses/LICENSE-2.0)
+
+Those files stay under Apache-2.0:
+
+- docker-compose.yml and docker-compose.backups.yml, rendered by
+  scripts/render.py from OneUptime's docker-compose.yml,
+  docker-compose.base.yml and config.example.env at the version in
+  overrides.env (APP_TAG), with ports, container names, networks and
+  empty variables removed and secrets replaced by Coolify variables
+- Clickhouse/config.d/*.xml and Clickhouse/users.d/*.xml, copied unchanged
+- packages/Probe/seccomp_profile.json, copied unchanged

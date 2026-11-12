@@ -1,4 +1,4 @@
-"""Contracts the committed bundle must meet (see .scratch/oneuptime-coolify/spec.md)."""
+"""Contracts the committed bundles must meet."""
 
 import unittest
 

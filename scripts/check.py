@@ -4,7 +4,7 @@
 Usage: scripts/check.py [docker-compose.yml]
 
 Exits non-zero and prints one line per problem when the bundle breaks a
-contract from the spec (.scratch/oneuptime-coolify/spec.md).
+contract listed in the README.
 """
 
 import re
