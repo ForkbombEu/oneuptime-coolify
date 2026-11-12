@@ -61,7 +61,7 @@ REQUIRED = [
 # Coolify variables with a committed default (from overrides.env), rendered as ${VAR:-default}.
 DEFAULTED = ["APP_TAG", "BACKUP_PREFIX", "BACKUP_SCOPE"]  # BACKUP_*: backups bundle only
 
-SENTINEL = re.compile(r"VIGIL__([A-Z0-9_]+?)__")
+SENTINEL = re.compile(r"ONEUPTIME_COOLIFY__([A-Z0-9_]+?)__")
 
 
 def clone_upstream(tag, into):
@@ -74,7 +74,7 @@ def clone_upstream(tag, into):
 
 def flatten(upstream, extra_files):
     env = {key: os.environ[key] for key in ("PATH", "HOME", "DOCKER_HOST") if key in os.environ}
-    env.update({name: f"VIGIL__{name}__" for name in REQUIRED + DEFAULTED})
+    env.update({name: f"ONEUPTIME_COOLIFY__{name}__" for name in REQUIRED + DEFAULTED})
     return compose_config(
         [upstream / "docker-compose.yml", *extra_files],
         "--no-path-resolution",

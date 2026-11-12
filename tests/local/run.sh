@@ -3,7 +3,7 @@
 # Usage: tests/local/run.sh [--keep]
 set -eu
 cd "$(dirname "$0")/../.."
-compose="docker compose -p vigil-smoke -f docker-compose.yml -f tests/local/compose.override.yml --env-file tests/local/throwaway.env"
+compose="docker compose -p oneuptime-coolify-smoke -f docker-compose.yml -f tests/local/compose.override.yml --env-file tests/local/throwaway.env"
 [ "${1:-}" = "--keep" ] || trap '$compose down -v' EXIT
 $compose up -d --wait --wait-timeout 600 app ingress postgres clickhouse valkey
 status=0

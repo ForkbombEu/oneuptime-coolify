@@ -1,4 +1,4 @@
-# vigil: OneUptime on Coolify
+# oneuptime-coolify: OneUptime on Coolify
 
 Self-hosted [OneUptime](https://oneuptime.com) (uptime monitors, status pages, incidents, on-call, optional telemetry), deployed as a Docker Compose application on our Coolify.
 

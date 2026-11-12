@@ -3,7 +3,7 @@
 # Usage: tests/local/try.sh up|down|logs [service]
 set -eu
 cd "$(dirname "$0")/../.."
-compose="docker compose -p vigil-try -f docker-compose.yml -f tests/local/compose.override.yml --env-file tests/local/throwaway.env"
+compose="docker compose -p oneuptime-coolify-try -f docker-compose.yml -f tests/local/compose.override.yml --env-file tests/local/throwaway.env"
 case "${1:-up}" in
   up)
     $compose up -d --wait --wait-timeout 600
